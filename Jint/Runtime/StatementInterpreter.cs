@@ -19,7 +19,7 @@ namespace Jint.Runtime
 
         private Completion ExecuteStatement(Statement statement)
         {
-            return _engine.ExecuteStatement(statement);
+			return _engine.ExecuteStatement(statement);
         }
 
         public Completion ExecuteEmptyStatement(EmptyStatement emptyStatement)
@@ -414,6 +414,7 @@ namespace Jint.Runtime
             {
                 foreach (var statement in statementList)
                 {
+					c.Location = statement.Location;
                     c = ExecuteStatement(statement);
                     if (c.Type != Completion.Normal)
                     {

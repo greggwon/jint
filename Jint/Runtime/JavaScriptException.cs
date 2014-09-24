@@ -1,6 +1,7 @@
 ﻿using System;
 using Jint.Native;
 using Jint.Native.Error;
+using Jint.Parser.Ast;
 
 namespace Jint.Runtime
 {
@@ -13,11 +14,14 @@ namespace Jint.Runtime
             _errorObject = errorConstructor.Construct(Arguments.Empty);
         }
 
-        public JavaScriptException(ErrorConstructor errorConstructor, string message)
-            : base(message)
-        {
-            _errorObject = errorConstructor.Construct(new JsValue[] { message });
-        }
+		public JavaScriptException( ErrorConstructor errorConstructor, string message )
+			: base(message) {
+			_errorObject = errorConstructor.Construct(new JsValue[] { message });
+		}
+		public JavaScriptException( Statement stmt, string message, JavaScriptException ex )
+			: base(message+": "+stmt.ToString(), ex) {
+				_errorObject = new JsValue(message + ": " + stmt);
+		}
 
         public JavaScriptException(JsValue error)
             : base(GetErrorMessage(error))
@@ -34,7 +38,7 @@ namespace Jint.Runtime
                 return message;
             }
             else
-                return string.Empty;            
+                return error.ToString();            
         }
 
         public JsValue Error { get { return _errorObject; } }

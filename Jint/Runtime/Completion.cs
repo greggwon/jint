@@ -26,7 +26,14 @@ namespace Jint.Runtime
 
         public JsValue GetValueOrDefault()
         {
-            return Value.HasValue ? Value.Value : Undefined.Instance;
+			JsValue v;
+            if( Value.HasValue )
+				v = Value.Value;
+			else 
+				v = Undefined.Instance;
+			return v;
         }
-    }
+
+		public Parser.Location Location { get; set; }
+	}
 }

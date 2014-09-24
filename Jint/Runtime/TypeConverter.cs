@@ -340,11 +340,13 @@ namespace Jint.Runtime
 
         public static void CheckObjectCoercible(Engine engine, JsValue o)
         {
-            if (o == Undefined.Instance || o == Null.Instance)
-            {
-                throw new JavaScriptException(engine.TypeError);
-            }
-        }
+			if( o == Undefined.Instance  ) {
+				throw new JavaScriptException(o);
+			}
+			if( o == Null.Instance ) {
+				throw new JavaScriptException(engine.TypeError);
+			}
+		}
 
         public static IEnumerable<MethodBase> FindBestMatch(Engine engine, MethodBase[] methods, JsValue[] arguments)
         {
