@@ -6,6 +6,8 @@ using Jint.Native.Function;
 
 namespace Jint.Runtime.Interop
 {
+    using System;
+
     public sealed class MethodInfoFunctionInstance : FunctionInstance
     {
         private readonly MethodInfo[] _methods;
@@ -41,10 +43,15 @@ namespace Jint.Runtime.Interop
                         }
                         else
                         {
-                            parameters[i] = Engine.Options.GetTypeConverter().Convert(
+                            parameters[i] = Engine.ClrTypeConverter.Convert(
                                 arguments[i].ToObject(),
                                 parameterType,
                                 CultureInfo.InvariantCulture);
+
+                            if (typeof(System.Linq.Expressions.LambdaExpression).IsAssignableFrom(parameters[i].GetType()))
+                            {
+                                parameters[i] = (parameters[i] as System.Linq.Expressions.LambdaExpression).Compile();
+                            }
                         }
                     }
 
@@ -54,7 +61,7 @@ namespace Jint.Runtime.Interop
 
                     return result;
                 }
-                catch
+                catch 
                 {
                     // ignore method
                 }
