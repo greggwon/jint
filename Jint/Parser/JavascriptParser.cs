@@ -1999,7 +1999,7 @@ namespace Jint.Parser
         private void ConsumeSemicolon()
         {
             // Catch the very common case first: immediately a semicolon (char #59).
-            if (_source.CharCodeAt(_index) == 59)
+            if (_source.CharCodeAt(_index) == ';')
             {
                 Lex();
                 return;
@@ -3187,7 +3187,7 @@ namespace Jint.Parser
             }
 
             // 'return' followed by a space and an identifier is very common.
-            if (_source.CharCodeAt(_index) == 32)
+            if (_source.CharCodeAt(_index) == ' ')
             {
                 if (IsIdentifierStart(_source.CharCodeAt(_index + 1)))
                 {
