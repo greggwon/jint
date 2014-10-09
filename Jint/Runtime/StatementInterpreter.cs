@@ -304,7 +304,7 @@ namespace Jint.Runtime
         {
             if (statement.Argument == null)
             {
-                return new Completion(Completion.Return, Undefined.Instance, null);
+                return new Completion(Completion.Return, Undefined.Instance, null );
             }
             
             var exprRef = _engine.EvaluateExpression(statement.Argument);    
@@ -331,7 +331,7 @@ namespace Jint.Runtime
             }
             catch (JavaScriptException e)
             {
-                c = new Completion(Completion.Throw, e.Error, null);
+                c = new Completion(Completion.Throw, e.Error, null, e, withStatement);
             }
             finally
             {
@@ -409,16 +409,18 @@ namespace Jint.Runtime
         {
             var c = new Completion(Completion.Normal, null, null);
             Completion sl = c;
+			Statement last = null;
 
             try
             {
                 foreach (var statement in statementList)
                 {
+					last = statement;
 					c.Location = statement.Location;
                     c = ExecuteStatement(statement);
                     if (c.Type != Completion.Normal)
                     {
-                        return new Completion(c.Type, c.Value.HasValue ? c.Value : sl.Value, c.Identifier);
+                        return new Completion(c.Type, c.Value.HasValue ? c.Value : sl.Value, c.Identifier, null, last );
                     }
 
                     sl = c;
@@ -426,7 +428,7 @@ namespace Jint.Runtime
             }
             catch(JavaScriptException v)
             {
-                return new Completion(Completion.Throw, v.Error, v.Message, v);
+                return new Completion(Completion.Throw, v.Error, v.Message, v, last);
             }
 
             return new Completion(c.Type, c.GetValueOrDefault(), c.Identifier);
@@ -440,7 +442,7 @@ namespace Jint.Runtime
         public Completion ExecuteThrowStatement(ThrowStatement throwStatement)
         {
             var exprRef = _engine.EvaluateExpression(throwStatement.Argument);
-            return new Completion(Completion.Throw, _engine.GetValue(exprRef), null);
+            return new Completion(Completion.Throw, _engine.GetValue(exprRef), null, null, throwStatement);
         }
 
         /// <summary>
