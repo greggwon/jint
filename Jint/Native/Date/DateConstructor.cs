@@ -113,6 +113,8 @@ namespace Jint.Native.Date
             else if (arguments.Length == 1)
             {
                 var v = TypeConverter.ToPrimitive(arguments[0]);
+				if( arguments[0].IsObject() && arguments[ 0 ].AsObject() is DateInstance )
+					return arguments[ 0 ].AsObject();
                 if (v.IsString())
                 {
                     return Construct(Parse(Undefined.Instance, Arguments.From(v)).AsNumber());
