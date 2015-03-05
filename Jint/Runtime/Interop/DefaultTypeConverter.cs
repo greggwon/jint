@@ -3,23 +3,31 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Linq.Expressions;
 using Jint.Native;
+using System.Collections.Generic;
+using System.Reflection;
 
 namespace Jint.Runtime.Interop
 {
     public class DefaultTypeConverter : ITypeConverter
     {
         private readonly Engine _engine;
+        private static readonly Dictionary<string, bool> _knownConversions = new Dictionary<string, bool>();
+        private static readonly object _lockObject = new object();
+
+        private static MethodInfo convertChangeType = typeof(System.Convert).GetMethod("ChangeType", new Type[] { typeof(object), typeof(Type), typeof(IFormatProvider) } );
+        private static MethodInfo jsValueFromObject = typeof(JsValue).GetMethod("FromObject");
+        private static MethodInfo jsValueToObject = typeof(JsValue).GetMethod("ToObject");
 
         public DefaultTypeConverter(Engine engine)
         {
             _engine = engine;
         }
 
-        public object Convert(object value, Type type, IFormatProvider formatProvider)
+        public virtual object Convert(object value, Type type, IFormatProvider formatProvider)
         {
             if (value == null)
             {
-                if (TypeIsNullable(type))
+                if (TypeConverter.TypeIsNullable(type))
                 {
                     return null;
                 }
@@ -35,7 +43,7 @@ namespace Jint.Runtime.Interop
 
             if (type.IsEnum)
             {
-                var integer = System.Convert.ChangeType(value, typeof (int), formatProvider);
+                var integer = System.Convert.ChangeType(value, typeof(int), formatProvider);
                 if (integer == null)
                 {
                     throw new ArgumentOutOfRangeException();
@@ -46,9 +54,9 @@ namespace Jint.Runtime.Interop
 
             var valueType = value.GetType();
             // is the javascript value an ICallable instance ?
-            if (valueType == typeof (Func<JsValue, JsValue[], JsValue>))
+            if (valueType == typeof(Func<JsValue, JsValue[], JsValue>))
             {
-                var function = (Func<JsValue, JsValue[], JsValue>) value;
+                var function = (Func<JsValue, JsValue[], JsValue>)value;
 
                 if (type.IsGenericType)
                 {
@@ -64,14 +72,14 @@ namespace Jint.Runtime.Interop
                         {
                             @params[i] = Expression.Parameter(genericArguments[i], genericArguments[i].Name + i);
                         }
-                        var @vars = Expression.NewArrayInit(typeof(JsValue), @params.Select(p => Expression.Call(null, typeof(JsValue).GetMethod("FromObject"), Expression.Constant(_engine, typeof(Engine)), p)));
+                        var @vars = Expression.NewArrayInit(typeof(JsValue), @params.Select(p => Expression.Call(null, jsValueFromObject, Expression.Constant(_engine, typeof(Engine)), p)));
 
                         var callExpresion = Expression.Block(Expression.Call(
                                                 Expression.Call(Expression.Constant(function.Target),
                                                     function.Method,
                                                     Expression.Constant(JsValue.Undefined, typeof(JsValue)),
                                                     @vars),
-                                                typeof(JsValue).GetMethod("ToObject")), Expression.Empty());
+                                                jsValueToObject), Expression.Empty());
 
                         return Expression.Lambda(callExpresion, new ReadOnlyCollection<ParameterExpression>(@params));
                     }
@@ -79,29 +87,44 @@ namespace Jint.Runtime.Interop
                     {
                         var genericArguments = type.GetGenericArguments();
                         var returnType = genericArguments.Last();
-                        
+
                         var @params = new ParameterExpression[genericArguments.Count() - 1];
                         for (var i = 0; i < @params.Count(); i++)
                         {
                             @params[i] = Expression.Parameter(genericArguments[i], genericArguments[i].Name + i);
                         }
-                        var @vars = Expression.NewArrayInit(typeof(JsValue), @params.Select(p => Expression.Call(null, typeof(JsValue).GetMethod("FromObject"), Expression.Constant(_engine, typeof(Engine)), p)));
+
+                        var @vars = 
+                            Expression.NewArrayInit(typeof(JsValue), 
+                                @params.Select(p => {
+                                    var boxingExpression = Expression.Convert(p, typeof(object));
+                                    return Expression.Call(null, jsValueFromObject, Expression.Constant(_engine, typeof(Engine)), boxingExpression);
+                                })
+                            );
+
+                        // the final result's type needs to be changed before casting,
+                        // for instance when a function returns a number (double) but C# expects an integer
 
                         var callExpresion = Expression.Convert(
-                                                Expression.Call(
-                                                    Expression.Call(Expression.Constant(function.Target),
-                                                            function.Method,
-                                                            Expression.Constant(JsValue.Undefined, typeof(JsValue)),
-                                                            @vars),
-                                                    typeof(JsValue).GetMethod("ToObject")),
-                                                returnType);
+                                                Expression.Call(null,
+                                                    convertChangeType,
+                                                    Expression.Call(
+                                                            Expression.Call(Expression.Constant(function.Target),
+                                                                    function.Method,
+                                                                    Expression.Constant(JsValue.Undefined, typeof(JsValue)),
+                                                                    @vars),
+                                                            jsValueToObject),
+                                                        Expression.Constant(returnType, typeof(Type)),
+                                                        Expression.Constant(System.Globalization.CultureInfo.InvariantCulture, typeof(IFormatProvider))
+                                                        ),                            
+                                                    returnType);
 
                         return Expression.Lambda(callExpresion, new ReadOnlyCollection<ParameterExpression>(@params));
                     }
                 }
                 else
                 {
-                    if (type == typeof (Action))
+                    if (type == typeof(Action))
                     {
                         return (Action)(() => function(JsValue.Undefined, new JsValue[0]));
                     }
@@ -137,9 +160,38 @@ namespace Jint.Runtime.Interop
             return System.Convert.ChangeType(value, type, formatProvider);
         }
 
-        private static bool TypeIsNullable(Type type)
+        public virtual bool TryConvert(object value, Type type, IFormatProvider formatProvider, out object converted)
         {
-            return !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
+            bool canConvert;
+            var key = value == null ? String.Format("Null->{0}", type) : String.Format("{0}->{1}", value.GetType(), type);
+
+            lock (_lockObject)
+            {
+                if (!_knownConversions.TryGetValue(key, out canConvert))
+                {
+                    try
+                    {
+                        converted = Convert(value, type, formatProvider);
+                        _knownConversions.Add(key, true);
+                        return true;
+                    }
+                    catch
+                    {
+                        converted = null;
+                        _knownConversions.Add(key, false);
+                        return false;
+                    }
+                }
+            }
+
+            if (canConvert)
+            {
+                converted = Convert(value, type, formatProvider);
+                return true;
+            }
+
+            converted = null;
+            return false;
         }
     }
 }
