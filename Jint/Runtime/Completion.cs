@@ -40,6 +40,6 @@ namespace Jint.Runtime
 			return v;
         }
 
-		public Parser.Location Location { get; set; }
+        public Jint.Parser.Location Location { get; set; }
 	}
 }

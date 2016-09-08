@@ -227,7 +227,7 @@ namespace Jint.Runtime
 
             while (cursor != null)
             {
-                var keys = cursor.Properties.Keys.ToArray();
+                var keys = cursor.GetOwnProperties().Select(x => x.Key).ToArray();
                 foreach (var p in keys)
                 {
                     if (processedKeys.Contains(p))
@@ -238,13 +238,13 @@ namespace Jint.Runtime
                     processedKeys.Add(p);
                     
                     // collection might be modified by inner statement 
-                    if (!cursor.Properties.ContainsKey(p))
+                    if (!cursor.HasOwnProperty(p))
                     {
                         continue;
                     }
 
-                    var value = cursor.Properties[p];
-                    if (!value.Enumerable.HasValue || !value.Enumerable.Value.AsBoolean())
+                    var value = cursor.GetOwnProperty(p);
+                    if (!value.Enumerable.HasValue || !value.Enumerable.Value)
                     {
                         continue;
                     }
@@ -332,6 +332,7 @@ namespace Jint.Runtime
             catch (JavaScriptException e)
             {
                 c = new Completion(Completion.Throw, e.Error, null, e, withStatement);
+                c.Location = withStatement.Location;
             }
             finally
             {
@@ -409,14 +410,13 @@ namespace Jint.Runtime
         {
             var c = new Completion(Completion.Normal, null, null);
             Completion sl = c;
-			Statement last = null;
+            Statement s = null;
 
             try
             {
                 foreach (var statement in statementList)
                 {
-					last = statement;
-					c.Location = statement.Location;
+                    s = statement;
                     c = ExecuteStatement(statement);
                     if (c.Type != Completion.Normal)
                     {
@@ -428,7 +428,9 @@ namespace Jint.Runtime
             }
             catch(JavaScriptException v)
             {
-                return new Completion(Completion.Throw, v.Error, v.Message, v, last);
+                c = new Completion(Completion.Throw, v.Error, null);
+                c.Location = s.Location;
+                return c;
             }
 
             return new Completion(c.Type, c.GetValueOrDefault(), c.Identifier);
@@ -442,7 +444,9 @@ namespace Jint.Runtime
         public Completion ExecuteThrowStatement(ThrowStatement throwStatement)
         {
             var exprRef = _engine.EvaluateExpression(throwStatement.Argument);
-            return new Completion(Completion.Throw, _engine.GetValue(exprRef), null, null, throwStatement);
+            Completion c = new Completion(Completion.Throw, _engine.GetValue(exprRef), null);
+            c.Location = throwStatement.Location;
+            return c;
         }
 
         /// <summary>
