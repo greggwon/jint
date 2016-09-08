@@ -67,6 +67,28 @@ namespace Jint.Native.Date
                     "yyyy-MM-ddTH:m:s.fffK",
                     "yyyy-MM-ddK",
                     "yyyy-MMK",
+                    // Formats used in DatePrototype toString methods
+                    "ddd MMM dd yyyy HH:mm:ss 'GMT'K",
+                    "ddd MMM dd yyyy",
+                    "HH:mm:ss 'GMT'K",
+
+                    // standard formats
+                    "yyyy-M-dTH:m:s.FFFK",
+                    "yyyy/M/dTH:m:s.FFFK",
+                    "yyyy-M-dTH:m:sK",
+                    "yyyy/M/dTH:m:sK",
+                    "yyyy-M-dTH:mK",
+                    "yyyy/M/dTH:mK",
+                    "yyyy-M-d H:m:s.FFFK",
+                    "yyyy/M/d H:m:s.FFFK",
+                    "yyyy-M-d H:m:sK",
+                    "yyyy/M/d H:m:sK",
+                    "yyyy-M-d H:mK",
+                    "yyyy/M/d H:mK",
+                    "yyyy-M-dK",
+                    "yyyy/M/dK",
+                    "yyyy-MK",
+                    "yyyy/MK",
                     "yyyyK",
                     "THH:mm:ss.FFFK",
                     "THH:mm:ssK",
@@ -74,11 +96,19 @@ namespace Jint.Native.Date
                     "THHK"
                 }, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out result))
                 {
-                    if (!DateTime.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal,out result))
+                    if (!DateTime.TryParse(date, Engine.Options._Culture, DateTimeStyles.AdjustToUniversal, out result))
                     {
-                        throw new JavaScriptException(Engine.SyntaxError, "Invalid date: '"+date+"'");
-                    }
-                }
+                	    if (!DateTime.TryParse(date, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal,out result))
+                 	    {
+                  	      // unrecognized dates should return NaN (15.9.4.2)
+							// This is not helpful in understanding what the invalidate contains
+                    	    // return double.NaN;
+
+							// FV: return an exception with the problem date string.
+                        	throw new JavaScriptException(Engine.SyntaxError, "Invalid date: '"+date+"'");
+                    	}
+                	}
+            	}
             }
 
             return FromDateTime(result);
@@ -91,7 +121,7 @@ namespace Jint.Native.Date
 
         private JsValue Now(JsValue thisObj, JsValue[] arguments)
         {
-            return (DateTime.UtcNow - Epoch).TotalMilliseconds;
+            return System.Math.Floor((DateTime.UtcNow - Epoch).TotalMilliseconds);
         }
 
         public override JsValue Call(JsValue thisObject, JsValue[] arguments)
